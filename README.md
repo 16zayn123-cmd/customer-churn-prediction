@@ -1,202 +1,262 @@
 # Customer Churn Prediction — End-to-End Machine Learning Project
 
-A portfolio-ready machine learning project that predicts telecom customer churn and turns the trained model into a usable application.
+## Project overview
 
-## What this project demonstrates
+I built this project to take a machine-learning problem beyond a Jupyter notebook and turn it into a complete, usable application.
 
-- Data cleaning
-- Exploratory data analysis
-- Train/test splitting
-- Imputation
-- One-hot encoding
-- Feature scaling
-- Logistic Regression
-- Random Forest
-- Model comparison
-- ROC-AUC, precision, recall and F1 evaluation
-- An sklearn `Pipeline`
-- Saving a trained model with `joblib`
-- A professional Streamlit interface
-- Batch customer scoring
-- A Flask prediction API
-- GitHub-ready project structure
-- Render deployment configuration
+The goal is to predict whether a telecom customer is likely to churn using information such as their tenure, contract type, internet service, monthly charges, payment method and support services.
 
-## Architecture
+The project covers the full workflow from **data exploration and preprocessing through model training, evaluation, model persistence, a Streamlit interface and an optional Flask API**.
+
+> **Business question:** Can customer account and service information be used to identify customers who are at higher risk of leaving, so that a retention team can intervene earlier?
+
+---
+
+## Application
+
+The trained model is connected to a Streamlit application where a user can enter customer information and receive a churn probability and risk classification.
+
+![Customer Churn Streamlit application](docs/streamlit-app.png)
+
+The application contains three sections:
+
+- **Single customer** — enter one customer's details and calculate their churn risk.
+- **Batch scoring** — upload a CSV and score multiple customers at once.
+- **Model performance** — review the selected model and its evaluation metrics.
+
+---
+
+## End-to-end workflow
 
 ```text
-Raw customer data
-       |
-       v
-Cleaning / validation
-       |
-       v
-sklearn preprocessing pipeline
-  |                     |
-  | numeric             | categorical
-  v                     v
-impute + scale      impute + one-hot encode
-       \                /
-        \              /
-         v            v
-        ML classifier
-             |
-             v
-      churn probability
-          /       \
-         v         v
-   Streamlit UI   Flask API
-         |
-         v
-      deployment
+Raw Telco customer data
+        |
+        v
+Jupyter notebook
+EDA + data understanding
+        |
+        v
+Final preprocessing decisions
+        |
+        v
+src/train.py
+        |
+        +--> Missing-value handling
+        +--> One-hot encoding
+        +--> Feature scaling
+        +--> Logistic Regression
+        +--> Random Forest
+        |
+        v
+Model evaluation
+Accuracy / Precision / Recall / F1 / ROC-AUC
+        |
+        v
+Best model selected
+        |
+        v
+models/churn_pipeline.joblib
+        |
+        +-------------------+
+        |                   |
+        v                   v
+Streamlit app           Flask API
+Human-facing            Software-facing
+interface               prediction endpoint
 ```
+
+A key design choice was to save the **entire scikit-learn pipeline**, rather than saving only the classifier. This means new raw customer data goes through the same preprocessing used during training before a prediction is made.
+
+---
+
+## What I did
+
+### 1. Explored the data in Jupyter
+
+I used the notebook to understand the dataset before building the final training script. This included:
+
+- inspecting the columns and data types;
+- checking missing values and duplicates;
+- converting `TotalCharges` from text to numeric data;
+- examining the churn class distribution;
+- investigating churn against contract type, tenure, internet service and monthly charges;
+- deciding which variables required numerical or categorical preprocessing.
+
+The notebook is intentionally kept separate from the final production-style training code. I used it as the experimentation and analysis environment, while `train.py` contains the repeatable final process.
+
+### 2. Built a reusable preprocessing pipeline
+
+The dataset contains both numerical and categorical variables, so I used a `ColumnTransformer` to apply different preprocessing steps to each group.
+
+**Numerical features**
+
+- Median imputation for missing values
+- Standard scaling
+
+**Categorical features**
+
+- Most-frequent-value imputation
+- One-hot encoding
+- `handle_unknown="ignore"` so unseen categories do not cause prediction failures
+
+This preprocessing is contained inside the same scikit-learn `Pipeline` as the classifier.
+
+### 3. Compared classification models
+
+The training script compares:
+
+- Logistic Regression
+- Random Forest
+
+Both models use class balancing because churn is not evenly distributed between the two target classes.
+
+The script evaluates each model using:
+
+- Accuracy
+- Precision
+- Recall
+- F1 score
+- ROC-AUC
+
+I use ROC-AUC as the model-selection metric because the application is primarily interested in ranking customers by churn risk and producing a probability score rather than only returning a yes/no label.
+
+### 4. Saved the trained pipeline
+
+The selected model is saved using `joblib`:
+
+```text
+models/churn_pipeline.joblib
+```
+
+This saved file contains both the preprocessing steps and trained classifier. The Streamlit application can therefore load one object and make predictions from raw customer inputs.
+
+### 5. Built a user-facing Streamlit application
+
+The Streamlit application converts the machine-learning model into something a non-technical user can interact with.
+
+For an individual customer, the app:
+
+1. collects the customer's information;
+2. converts the inputs into a Pandas DataFrame;
+3. passes the DataFrame into the saved pipeline;
+4. calculates the probability of churn;
+5. displays a risk level and suggested retention action.
+
+The batch-scoring section also allows a CSV containing multiple customers to be scored in one operation.
+
+### 6. Added a Flask API
+
+I also included a Flask API to demonstrate how the same model could be integrated into another software system.
+
+For example, a company's CRM could send a customer's existing account data to the API and receive a churn probability without an employee manually entering the information into the Streamlit interface.
+
+---
 
 ## Project structure
 
 ```text
 customer_churn_end_to_end/
 |
-├── app.py
-├── api.py
-├── requirements.txt
-├── render.yaml
+├── app.py                         # Streamlit application
+├── api.py                         # Optional Flask prediction API
 ├── README.md
 ├── MODEL_CARD.md
-├── .gitignore
-├── .streamlit/
-│   └── config.toml
+├── requirements.txt
+├── render.yaml
+|
 ├── data/
 │   └── README.md
-├── models/
-│   └── .gitkeep
-├── reports/
-│   └── .gitkeep
+|
 ├── notebooks/
-│   └── 01_churn_analysis.ipynb
-└── src/
-    ├── __init__.py
-    ├── download_data.py
-    └── train.py
+│   └── 01_churn_analysis.ipynb    # EDA and experimentation
+|
+├── src/
+│   ├── download_data.py           # Makes sure the dataset is available
+│   └── train.py                   # Final repeatable training pipeline
+|
+├── models/                        # Generated trained-model files
+├── reports/                       # Generated metrics and confusion matrix
+└── docs/
+    └── streamlit-app.png
 ```
 
-## 1. Install the project
+---
 
-Open a terminal in this folder.
+## Dataset
 
-### Create a virtual environment
+The project uses the public Telco Customer Churn dataset. The target variable is:
 
-Windows:
+```text
+Churn
+```
+
+where:
+
+```text
+No  = customer stayed
+Yes = customer churned
+```
+
+The model uses customer demographics, account information, services, contract information and charges. `customerID` is not used as a predictive feature.
+
+The project includes `src/download_data.py`, which checks whether the dataset is already available and attempts to download it when necessary.
+
+---
+
+## Running the project locally
+
+### 1. Clone or download the repository
+
+Open a terminal in the project folder.
+
+### 2. Install the dependencies
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
+python -m pip install -r requirements.txt
 ```
 
-macOS/Linux:
+`requirements.txt` contains the Python libraries needed by the project, including Pandas, NumPy, scikit-learn, Streamlit, Flask, Matplotlib and joblib.
 
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-Install packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-## 2. Get the dataset
-
-If you already have `WA_Fn-UseC_-Telco-Customer-Churn.csv`, place it inside the `data/` folder.
-
-Otherwise run:
-
-```bash
-python src/download_data.py
-```
-
-The training script will also try to download it automatically if it is missing.
-
-## 3. Train the model
+### 3. Train the models
 
 ```bash
 python src/train.py
 ```
 
-This will:
+The script will:
 
-1. Load and clean the data.
-2. Split it into training and test sets.
-3. Build preprocessing pipelines.
-4. Train Logistic Regression and Random Forest.
-5. Evaluate both.
-6. Select the model with the highest ROC-AUC.
-7. Save the winning pipeline to `models/churn_pipeline.joblib`.
-8. Save metrics and metadata.
-9. Create a confusion-matrix image.
+- load and clean the data;
+- create the train/test split;
+- build the preprocessing pipeline;
+- train the candidate models;
+- evaluate them;
+- select the model with the highest ROC-AUC;
+- save the winning pipeline;
+- save model metadata and evaluation outputs.
 
-Generated files:
-
-```text
-models/churn_pipeline.joblib
-models/metadata.json
-reports/metrics.json
-reports/confusion_matrix.png
-```
-
-## 4. Run the professional interface
+### 4. Start the Streamlit application
 
 ```bash
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
-Streamlit will show a local address, normally:
+Streamlit starts a local web server and normally opens the application at:
 
 ```text
 http://localhost:8501
 ```
 
-The app contains three tabs:
+---
 
-### Single customer
-Enter one customer's details and receive:
+## Optional Flask API
 
-- churn probability
-- low/medium/high risk band
-- predicted class
-- suggested retention action
-- descriptive profile signals
-
-### Batch scoring
-Upload a CSV of customers and receive:
-
-- churn probability for every customer
-- predicted class
-- risk band
-- downloadable scored CSV
-
-### Model performance
-View:
-
-- selected model
-- ROC-AUC
-- recall
-- precision
-- F1
-- comparison between candidate models
-- leading transformed features
-
-## 5. Optional Flask API
-
-The project also includes a simple API to demonstrate how another system could call the model.
-
-Run:
+Run the API with:
 
 ```bash
 python api.py
 ```
 
-Health check:
+Health endpoint:
 
 ```text
 GET http://localhost:5000/health
@@ -208,7 +268,7 @@ Prediction endpoint:
 POST http://localhost:5000/predict
 ```
 
-Example JSON body:
+A calling application sends customer data as JSON. For example:
 
 ```json
 {
@@ -234,86 +294,53 @@ Example JSON body:
 }
 ```
 
-Example response:
+The API returns the model's churn probability and predicted class.
 
-```json
-{
-  "churn_probability": 0.81,
-  "predicted_churn": 1
-}
-```
+---
 
-The actual probability depends on the model trained on your data.
+## What I learned
 
-## 6. Put it on GitHub
+This project helped me understand the difference between **developing a model** and **turning a model into a usable system**.
 
-Create a new GitHub repository called something like:
+The main lessons I took from the project were:
 
-```text
-customer-churn-prediction
-```
+- A Jupyter notebook is useful for exploration and experimentation, while a `.py` training script makes the final process reproducible.
+- Preprocessing should be fitted on the training data and kept together with the model in a pipeline.
+- Categorical data needs to be converted into a numerical representation before most machine-learning algorithms can use it.
+- Accuracy alone can be misleading for an imbalanced classification problem, so precision, recall, F1 and ROC-AUC also matter.
+- `predict_proba()` is useful in a churn problem because a business can rank customers by risk instead of relying only on a binary prediction.
+- Saving the complete pipeline with `joblib` prevents the application from having to manually reproduce the training transformations.
+- Streamlit provides a quick way to expose a model through a human-facing interface.
+- A Flask API serves a different purpose: it allows other software systems to send data to the model and receive predictions programmatically.
+- Organising an ML project into separate data, notebook, source-code, model, report and application components makes the work easier to reproduce and explain.
 
-Then from this project folder:
+---
 
-```bash
-git init
-git add .
-git commit -m "Build end-to-end customer churn prediction project"
-git branch -M main
-git remote add origin YOUR_GITHUB_REPOSITORY_URL
-git push -u origin main
-```
+## Improvements I would make next
 
-You can also use GitHub Desktop instead of these commands.
+If I developed this project further, I would explore:
 
-### What should be visible to an employer?
+- cross-validation and more systematic hyperparameter tuning;
+- threshold optimisation based on the business cost of false negatives and false positives;
+- probability calibration;
+- SHAP or another local explanation method for individual predictions;
+- experiment tracking;
+- model and data-drift monitoring;
+- automated tests for preprocessing and API inputs;
+- containerisation with Docker;
+- deployment to a cloud service and CI/CD from GitHub.
 
-Your repository should make it easy to find:
+---
 
-- the business problem
-- your notebook
-- the preprocessing approach
-- models compared
-- evaluation metrics
-- the Streamlit application
-- the optional Flask API
-- deployment instructions
-- responsible-use limitations
+## Responsible use
 
-## 7. Deploy on Render
+This is a portfolio and learning project built using a public historical dataset. The predictions demonstrate patterns learned from that dataset and should not be treated as causal explanations or used as an automated decision system for real customers without additional validation.
 
-This repository already contains `render.yaml`.
+A production churn system would require appropriate data governance, privacy and security controls, fairness testing, monitoring, drift detection, human oversight and periodic retraining.
 
-After pushing the project to GitHub:
+---
 
-1. Sign in to Render.
-2. Create a new Blueprint or Web Service from your GitHub repository.
-3. Render can read the included `render.yaml`.
-4. During the build it will install the packages and run the training script.
-5. It will then start the Streamlit app.
+## Technologies used
 
-Equivalent settings are:
+`Python` · `Pandas` · `NumPy` · `scikit-learn` · `Matplotlib` · `joblib` · `Streamlit` · `Flask` · `Jupyter` · `Git/GitHub`
 
-Build command:
-
-```bash
-pip install -r requirements.txt && python src/train.py
-```
-
-Start command:
-
-```bash
-streamlit run app.py --server.address 0.0.0.0 --server.port $PORT
-```
-
-Once deployed, you will have a public link that a recruiter can open.
-
-## Portfolio explanation
-
-A concise interview explanation:
-
-> I built an end-to-end customer churn prediction system rather than stopping at a notebook. I cleaned the Telco churn data, created a reusable sklearn preprocessing and modelling pipeline, compared Logistic Regression with Random Forest using ROC-AUC and other classification metrics, and saved the selected model. I then exposed the model through a Streamlit application that supports both individual predictions and batch customer scoring. I also added a Flask API to show how the model could integrate with another application and prepared the repository for cloud deployment.
-
-## Important
-
-Do not present model probability as certainty. A churn score is a model estimate based on patterns in historical data. In a real organisation, model performance, fairness, drift, privacy and security would need to be monitored continuously.
